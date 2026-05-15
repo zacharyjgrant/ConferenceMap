@@ -1,0 +1,159 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Conference Presentations Map</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Georgia', serif;
+    background: #12151c;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 2rem 1rem 3rem;
+  }
+  h1 {
+    font-size: 1.5rem;
+    font-weight: normal;
+    letter-spacing: 0.04em;
+    color: #e8e6e0;
+    margin-bottom: 0.3rem;
+    text-align: center;
+  }
+  .subtitle {
+    font-size: 0.85rem;
+    color: #6b7280;
+    margin-bottom: 1.5rem;
+    text-align: center;
+    font-style: italic;
+  }
+  #map-container {
+    position: relative;
+    width: 100%;
+    max-width: 960px;
+    border-radius: 10px;
+    overflow: visible;
+    box-shadow: 0 2px 32px rgba(0,0,0,0.5);
+  }
+  #map-svg {
+    width: 100%;
+    height: auto;
+    display: block;
+    border-radius: 10px;
+  }
+  .pin { cursor: pointer; }
+  .tooltip {
+    position: absolute;
+    background: #1e2330;
+    border: 1px solid #2e3448;
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-family: 'Georgia', serif;
+    font-size: 13px;
+    color: #e8e6e0;
+    pointer-events: none;
+    max-width: 270px;
+    box-shadow: 0 4px 24px rgba(0,0,0,0.4);
+    z-index: 20;
+    display: none;
+    line-height: 1.5;
+  }
+  .tt-name { font-weight: bold; font-size: 13.5px; margin-bottom: 5px; color: #f0ede6; }
+  .tt-talk { color: #9ca3af; font-size: 12px; line-height: 1.5; font-style: italic; margin-bottom: 5px; }
+  .tt-loc { color: #6b7280; font-size: 11px; }
+  #legend {
+    margin-top: 0.9rem;
+    font-size: 12px;
+    color: #6b7280;
+    font-style: italic;
+    text-align: center;
+  }
+</style>
+</head>
+<body>
+
+<h1>Conference Presentations</h1>
+<p class="subtitle">Hover or tap a pin to see details</p>
+
+<div id="map-container">
+  <svg id="map-svg" viewBox="0 0 960 480" xmlns="http://www.w3.org/2000/svg">
+    <rect width="960" height="480" fill="#1e3a5f" rx="10"/>
+    <g id="world-paths"></g>
+    <g id="pins-layer"></g>
+  </svg>
+  <div class="tooltip" id="tooltip">
+    <div class="tt-name" id="tt-name"></div>
+    <div class="tt-talk" id="tt-talk"></div>
+    <div class="tt-loc" id="tt-loc"></div>
+  </div>
+</div>
+
+<div id="legend">6 presentations across North America &amp; Europe</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/topojson/3.0.2/topojson.min.js"></script>
+<script>
+const conferences = [
+  { name: "ICOSAHOM 2025", talk: "High Order Strong Stability Preserving Two-Derivative Explicit, Implicit, and IMEX Methods", city: "Montreal, Canada", lat: 45.5017, lng: -73.5673 },
+  { name: "Efficient High-Order Time Discretization Methods for PDEs (2025)", talk: "Mixed Precision Runge\u2013Kutta Methods", city: "Anacapri, Italy", lat: 40.5508, lng: 14.2124 },
+  { name: "SIAM CSE 2023", talk: "High Order Strong Stability Preserving Multi-Derivative Implicit and IMEX Runge\u2013Kutta Methods with Asymptotic Preserving Properties", city: "Amsterdam, Netherlands", lat: 52.3676, lng: 4.9041 },
+  { name: "ICIAM 2019", talk: "Implicit and Explicit Parallel Error Inhibiting Schemes", city: "Valencia, Spain", lat: 39.4699, lng: -0.3763 },
+  { name: "NAHOMCON 2019", talk: "Implicit and Explicit Parallel Error Inhibiting Schemes", city: "San Diego, CA", lat: 32.7157, lng: -117.1611 },
+  { name: "ICOSAHOM 2018", talk: "Strong Stability Preserving Two Derivative Runge\u2013Kutta Methods with Taylor Series Formulation", city: "London, England", lat: 51.5074, lng: -0.1278 },
+];
+
+const W = 960, H = 480;
+const projection = d3.geoNaturalEarth1().scale(147).translate([W/2, H/2]);
+const path = d3.geoPath().projection(projection);
+const svg = d3.select("#map-svg");
+
+d3.json("https://cdn.jsdelivr.net/npm/world-atlas@2/countries-110m.json").then(world => {
+  const countries = topojson.feature(world, world.objects.countries);
+  svg.select("#world-paths").selectAll("path")
+    .data(countries.features).join("path")
+    .attr("d", path)
+    .attr("fill", "#4a7c6f")
+    .attr("stroke", "#2d5c52")
+    .attr("stroke-width", 0.4);
+
+  const layer = svg.select("#pins-layer");
+  conferences.forEach(c => {
+    const [x, y] = projection([c.lng, c.lat]);
+    if (!x || !y) return;
+    const g = layer.append("g").attr("class","pin").attr("transform",`translate(${x},${y})`);
+    g.append("circle").attr("r",14).attr("fill","#D85A30").attr("fill-opacity",0.18);
+    g.append("circle").attr("r",7).attr("fill","#D85A30").attr("stroke","#4A1B0C").attr("stroke-width",1.4);
+    g.append("circle").attr("r",2.5).attr("fill","white").attr("fill-opacity",0.8);
+    g.on("mouseenter", e => show(e,c))
+     .on("mousemove", e => move(e))
+     .on("mouseleave", hide)
+     .on("click", e => show(e,c));
+  });
+});
+
+const tip = document.getElementById("tooltip");
+const container = document.getElementById("map-container");
+
+function show(e, c) {
+  document.getElementById("tt-name").textContent = c.name;
+  document.getElementById("tt-talk").textContent = "\u201c" + c.talk + "\u201d";
+  document.getElementById("tt-loc").textContent = c.city;
+  tip.style.display = "block";
+  move(e);
+}
+function move(e) {
+  const r = container.getBoundingClientRect();
+  let x = e.clientX - r.left + 16;
+  let y = e.clientY - r.top - 14;
+  if (x + 285 > r.width) x = e.clientX - r.left - 295;
+  if (y < 0) y = 4;
+  tip.style.left = x + "px";
+  tip.style.top = y + "px";
+}
+function hide() { tip.style.display = "none"; }
+</script>
+</body>
+</html>
